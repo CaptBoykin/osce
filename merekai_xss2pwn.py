@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+# MS09-002 script: https://www.exploit-db.com/exploits/8152 (Ahmed Obied (ahmed.obied@gmail.com))
+
 from os.path import realpath, dirname
 from os import system, environ, popen, kill
 from filecmp import cmp as file_cmp
