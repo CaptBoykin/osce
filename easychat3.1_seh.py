@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # TYLER BOYKIN ( @CaptBoykin )
-
+#   Took around 8-10h.  Need to build my momentum.
 # Practice of CTP / OSCE
 
 # Easy Chat Server Exploit (<=3.1) - SEH Stack Based Overflow
