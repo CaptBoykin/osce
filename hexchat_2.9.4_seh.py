@@ -3,7 +3,7 @@
 # HexChat 2.9.4 SEH 
 #   Tyler Boykin (OS-40299)
 #
-#   This was a time trial and took me around 10 hours, which is a drastic improvement from before.
+#   This was a time trial and took me around 8 hours, which is a drastic improvement from before.
 #   It even incorporates shellcode carving, stack realignment, SEH/NSEH, alpha numeric opcodes, etc.
 #
 #   Resources and tools used in this include
